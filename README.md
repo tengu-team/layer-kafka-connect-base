@@ -31,7 +31,9 @@ The workflow will be somewhat like this:
  - `set_worker_config(config)`  Set worker configs via a dict, a list of configuration is available [here](https://docs.confluent.io/current/connect/allconfigs.html#connect-allconfigs).
  - `get_worker_service()` Returns the ip:port of the Kubernetes service if available.
  - `set_base_image(image)` Set the docker image to deploy to Kubernetes
+
  ***REST api calls to the workers:***
+ 
  They all return a named tuple `Api_response` with the following format `Api_response(status_code, json)`.  If a `RequestException` is raised then `None` is returned. `connector` should be a dict with connector configs and `connector_name` is expected to be a string.
  - `register_connector(connector, connector_name)`
  - `unregister_connector(connector_name)`
