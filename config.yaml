@@ -1,0 +1,29 @@
+options:
+  workers:
+    type: int
+    default: 1
+    description: |
+      Number of distributed workers.
+  max-tasks:
+    type: int
+    default: 1
+    description: |
+      Max number of tasks.
+  group-id:
+    type: string
+    default: ""
+    description: |
+      If set this value will be used as the workers group_id. Default the application name is used.
+  topics:
+    type: string
+    default: ""
+    description: |
+      Space separated list of kafka topics.
+  worker-config:
+    type: string
+    default: ""
+    description: |
+      Override worker configuration.
+      Example:
+      config.storage.replication.factor=5
+      offset.storage.partitions=10

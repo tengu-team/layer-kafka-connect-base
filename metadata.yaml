@@ -1,0 +1,18 @@
+name: kafka-connect-base
+summary: Base layer for Kafka Connect
+maintainer: Sander Borny <sanderborny@ugent.be>
+description: |
+  Base layer for Kafka Connect
+tags:
+  - streaming
+  - storage
+subordinate: false
+provides:
+  website:
+    interface: http
+requires:
+  kafka:
+    interface: kafka
+  kubernetes:
+    interface: kubernetes-deployer
+series: ["xenial"]
