@@ -28,13 +28,11 @@ The workflow will be somewhat like this:
  Use the helper methods defined in `kakfa_connect_base.py` to setup / configure the workers.
 
 ***General functions:***
-
  - `set_worker_config(config)`  Set worker configs via a dict, a list of configuration is available [here](https://docs.confluent.io/current/connect/allconfigs.html#connect-allconfigs).
  - `get_worker_service()` Returns the ip:port of the Kubernetes service if available.
  - `set_base_image(image)` Set the docker image to deploy to Kubernetes
- - 
  ***REST api calls to the workers:***
- They all return a named tuple Api_response with the following format `Api_response(status_code, json)`.  If a `RequestException` is raised then `None` is returned. `connector` should be a dict with connector configs and `connector_name` is expected to be a string.
+ They all return a named tuple `Api_response` with the following format `Api_response(status_code, json)`.  If a `RequestException` is raised then `None` is returned. `connector` should be a dict with connector configs and `connector_name` is expected to be a string.
  - `register_connector(connector, connector_name)`
  - `unregister_connector(connector_name)`
  - `list_connectors()`
@@ -73,6 +71,9 @@ def run():
         status_set('active', 'ready')
         set_flag('kafka-connect-mongodb.running')  
 ```
+
+## Caveats
+All config parameters except `worker-config` need to have at least a default configuration set even if you intend to set all configuration via an upper layer. Normally this should be a small concern since they all have a default value.
 
 ## Authors
 
