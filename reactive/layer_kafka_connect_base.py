@@ -82,7 +82,6 @@ def configure_kafka_connect_base():
 
     worker_config = generate_worker_config()
     worker_config['bootstrap.servers'] = ','.join(kafka_brokers)
-    worker_config['group.id'] = conf.get('group-id')
     port = worker_config['rest.port'] if 'rest.port' in worker_config else 8083
 
     resource_context = {
@@ -150,6 +149,10 @@ def generate_worker_config():
     # Get worker config set from above layer and
     # overwrite values set via config worker-config
     properties = unitdata.kv().get('worker.properties', {})
+    if 'group.id' not in properties:
+        properties['group.id'] = conf.get('group-id')
+    if 'tasks.max' not in properties:
+        properties['tasks.max'] = conf.get('max-tasks')  
     if conf.get('worker-config'):
         worker_config = conf.get('worker-config').rstrip('\n')
         worker_config = worker_config.split('\n')
@@ -157,5 +160,5 @@ def generate_worker_config():
         for config in worker_config:
             key, value = config.split('=')
             override[key] = value.rstrip()
-        properties.update(override)
+        properties.update(override)       
     return properties

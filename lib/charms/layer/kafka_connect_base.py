@@ -5,10 +5,11 @@ from charmhelpers.core import unitdata
 
 
 def set_worker_config(config):
-    '''https://docs.confluent.io/current/connect/allconfigs.html#connect-allconfigs
+    '''List with available configs
+    https://docs.confluent.io/current/connect/allconfigs.html#connect-allconfigs
     '''
     unitdata.kv().set('worker.properties', config)
-    clear_flag('kafka-connect-base.configured') # Is dit nodig?
+    clear_flag('kafka-connect-base.configured')
 
 
 def set_base_image(image):
@@ -20,26 +21,26 @@ def get_worker_service():
     return unitdata.kv().get('kafka-connect-service', '')
 
 
-# https://docs.confluent.io/current/connect/restapi.html
-# TODO document response
+# The following functions perform REST api calls to the workers. 
+#
+# They all return a named tuple Api_response with the following format:
+#     Api_response(status_code, json)
+# If a RequestException is raised then None is returned.
+#
+# A list with available functions:
+#     - register_connector(connector, connector_name)
+#     - unregister_connector(connector_name)
+#     - list_connectors()
+#     - connector_status(connector_name)
+#     - connector_restart(connector_name)
+#     - connector_pause(connector_name)
+#     - connector_resume(connector_name)
+#     - list_tasks(connector_name)
+
+
 Api_response = collections.namedtuple('Api_response', ['status_code', 'json'])
 
-def register_connector(connector):
-    headers = {
-        'Content-type': 'application/json',
-        'Accept': 'application/json'
-    }
-    try:
-        r = requests.post("http://" + get_worker_service() + "/connectors",
-                        json=connector,
-                        headers=headers)
-        return Api_response(r.status_code, r.json())
-    except requests.exceptions.RequestException as e:
-        print(e)
-        return None
-
-
-def register_update_connector(connector, connector_name):
+def register_connector(connector, connector_name):
     headers = {
         'Content-type': 'application/json',
         'Accept': 'application/json'
