@@ -7,7 +7,7 @@ This layer functions as a base to deploy and configure kafka connect workers in 
 
 The layer adds multiple configuration options, these are common configuration parameters used by upper layers and needed in distributed worker configuration:
 ### Mandatory configs
-- `workers` number of workers (Kubernetes pods) will be deployed.
+- `workers` number of workers (Kubernetes pods) to be deployed.
 - `max-tasks` the maximum number of tasks that should be created for this connector. 
 - `group-id` a unique string that identifies the Connect cluster group this worker belongs to.
 - `topics` a list of topics to use as input for this connector.
@@ -51,9 +51,9 @@ from charms.layer.kafka_connect_base import register_connector, set_worker_confi
 @when('mongodb.available')
 @when_not('kafka-connect-mongodb.configured')
 def configure():	
-	worker_configs = {
-		'key.converter': 'org.apache.kafka.connect.json.JsonConverter',
-		...
+    worker_configs = {
+        'key.converter': 'org.apache.kafka.connect.json.JsonConverter',
+	    ...
     }
     set_worker_config(worker_configs)
     set_flag('kafka-connect-mongodb.configured')
@@ -64,11 +64,11 @@ def configure():
 @when_not('kafka-connect-mongodb.running')
 def run():
     # Get MongoDB connection information
-	connector_configs = {
-		'connector.class': 'com.startapp.data.MongoSinkConnector',
-		...
-	}
-	response = register_connector(mongodb_connector_config, mongodb_connector_name)
+    connector_configs = {
+        'connector.class': 'com.startapp.data.MongoSinkConnector',
+        ...
+    }
+    response = register_connector(mongodb_connector_config, mongodb_connector_name)
     if response and (response.status_code == 200 or response.status_code == 201):
         status_set('active', 'ready')
         set_flag('kafka-connect-mongodb.running')  
