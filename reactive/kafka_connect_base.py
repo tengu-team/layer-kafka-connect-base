@@ -53,14 +53,13 @@ def check_kafka_changed():
         clear_flag('kafka-connect-base.installed')
 
 
-# Document for above layer, usable for plugin docker image
 @when('kafka-connect-base.install')
 @when_not('kafka-connect-base.installed')
 def install_kafka_connect_base():
     if not os.path.exists('/etc/kafka-connect'):
         os.makedirs('/etc/kafka-connect')
     if not unitdata.kv().get('docker-image', None):
-        unitdata.kv().set('docker-image', 'sborny/kafka-connect-mongodb')
+        unitdata.kv().set('docker-image', 'sborny/kafka-connect-base')
     set_flag('kafka-connect-base.installed')
 
 
@@ -90,7 +89,7 @@ def configure_kafka_connect_base():
         'properties': worker_config,
         'service_name': juju_app_name + '-service',
         'port': port,
-        'deployment_name': juju_app_name + 'deployment',
+        'deployment_name': juju_app_name + '-deployment',
         'replicas': conf.get('workers', 1),
         'container_name': juju_app_name,
         'image': unitdata.kv().get('docker-image'),
@@ -127,16 +126,21 @@ def kubernetes_status_update():
         return
     unit_name = os.environ['JUJU_UNIT_NAME'].split('/')[0]
     nodeport = None
-    # Check if service has been created on k8s
-    # If the service is created, set the connection string 
+    deployment_running = False
+    # Check if service and deployment has been created on k8s
+    # If the service is created, set the connection string
     # else clear it.
     for resources in status['status']:
         if unit_name == resources:
             for resource in status['status'][resources]:
                 if resource['kind'] == "Service":
                     nodeport = resource['spec']['ports'][0]['nodePort']
+                elif resource['kind'] == "Deployment":
+                    if resource['status']['availableReplicas'] == \
+                        resource['status']['readyReplicas']:
+                        deployment_running = True
     kubernetes_workers = kubernetes.get_worker_ips()
-    if nodeport and kubernetes_workers:
+    if nodeport and kubernetes_workers and deployment_running:
         unitdata.kv().set('kafka-connect-service',
                           kubernetes_workers[0] + ':' + str(nodeport))
         set_flag('kafka-connect.running')
@@ -146,13 +150,13 @@ def kubernetes_status_update():
 
 
 def generate_worker_config():
-    # Get worker config set from above layer and
+    # Get worker config set from upper layer and
     # overwrite values set via config worker-config
     properties = unitdata.kv().get('worker.properties', {})
     if 'group.id' not in properties:
         properties['group.id'] = conf.get('group-id')
     if 'tasks.max' not in properties:
-        properties['tasks.max'] = conf.get('max-tasks')  
+        properties['tasks.max'] = conf.get('max-tasks')
     if conf.get('worker-config'):
         worker_config = conf.get('worker-config').rstrip('\n')
         worker_config = worker_config.split('\n')
@@ -160,5 +164,5 @@ def generate_worker_config():
         for config in worker_config:
             key, value = config.split('=')
             override[key] = value.rstrip()
-        properties.update(override)       
+        properties.update(override)
     return properties
