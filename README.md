@@ -24,6 +24,8 @@ The workflow will be somewhat like this:
 4. The base layer will set `kafka-connect.running` after deployment. You can now send connector configuration.
 5. Use `register_connector(connector, connector_name)` to send the connector config to the workers.
 
+By default the layer uses the docker image [sborny/kafka-connect-base](https://hub.docker.com/r/sborny/kafka-connect-base/). The docker README specifies which connectors are available for use.
+
 ### Helper methods
  Use the helper methods defined in `kakfa_connect_base.py` to setup / configure the workers.
 
