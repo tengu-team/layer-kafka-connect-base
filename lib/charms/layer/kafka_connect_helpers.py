@@ -1,6 +1,7 @@
+import json
 import requests
 import collections
-from charms.reactive import clear_flag
+from charms.reactive import clear_flag,set_flag
 from charmhelpers.core import unitdata
 
 
@@ -19,6 +20,38 @@ def set_base_image(image):
 
 def get_worker_service():
     return unitdata.kv().get('kafka-connect-service', '')
+
+
+def unregister_latest_connector():
+    """Tries to unregister the connectors which were
+    registered previously with register_connector().
+
+    Returns True when succesfully unregistered or when 
+    no previous connector has been set.
+    """
+    all_connectors = unitdata.kv().get('connectors', {})    
+    if all_connectors:
+        for connector_name in all_connectors:
+            response = unregister_connector(connector_name)
+            if not response or (response.status_code != 204 and response.status_code != 404):
+                return False
+    return True
+
+
+def register_latest_connector():
+    """Tries to register the connectors which were
+    registered previously with register_connector().
+
+    Returns True when succesfully registered or when 
+    no previous connector has been set.
+    """
+    all_connectors = unitdata.kv().get('connectors', {})
+    if all_connectors:
+        for connector_name, connector_config in all_connectors.items():
+            response = register_connector(connector_config, connector_name)
+            if not response or response.status_code != 201:
+                return False
+    return True
 
 
 # The following functions perform REST api calls to the workers. 
@@ -41,6 +74,9 @@ def get_worker_service():
 Api_response = collections.namedtuple('Api_response', ['status_code', 'json'])
 
 def register_connector(connector, connector_name):
+    all_connectors = unitdata.kv().get('connectors', {})
+    all_connectors[connector_name] = connector
+    unitdata.kv().set('connectors', all_connectors)
     headers = {
         'Content-type': 'application/json',
         'Accept': 'application/json'
@@ -56,6 +92,9 @@ def register_connector(connector, connector_name):
 
 
 def unregister_connector(connector_name):
+    all_connectors = unitdata.kv().get('connectors', {})
+    all_connectors.pop(connector_name, None)
+    unitdata.kv().set('connectors', all_connectors)
     headers = {
         'Content-type': 'application/json',
         'Accept': 'application/json'
@@ -70,6 +109,8 @@ def unregister_connector(connector_name):
     except requests.exceptions.RequestException as e:
         print(e)
         return None
+    except json.decoder.JSONDecodeError:
+        return Api_response(r.status_code, None)
 
 
 def list_connectors():
@@ -120,6 +161,8 @@ def connector_restart(connector_name):
     except requests.exceptions.RequestException as e:
         print(e)
         return None
+    except json.decoder.JSONDecodeError:
+        return Api_response(r.status_code, None)
 
 
 def connector_pause(connector_name):
@@ -138,6 +181,8 @@ def connector_pause(connector_name):
     except requests.exceptions.RequestException as e:
         print(e)
         return None
+    except json.decoder.JSONDecodeError:
+        return Api_response(r.status_code, None)
 
 
 def connector_resume(connector_name):
@@ -156,6 +201,8 @@ def connector_resume(connector_name):
     except requests.exceptions.RequestException as e:
         print(e)
         return None
+    except json.decoder.JSONDecodeError:
+        return Api_response(r.status_code, None)
 
 
 def list_tasks(connector_name):

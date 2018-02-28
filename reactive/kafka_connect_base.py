@@ -2,11 +2,15 @@ import os
 import yaml
 import hashlib
 import datetime
-from charms.reactive import when, when_any, when_not, set_flag, clear_flag
+from charms.reactive import when, when_any, when_not, set_flag, clear_flag, when_not_all
 from charms.reactive.helpers import data_changed
 from charms.reactive.relations import endpoint_from_flag
 from charmhelpers.core import unitdata, templating
 from charmhelpers.core.hookenv import status_set, config
+from charms.layer.kafka_connect_helpers import (
+    register_latest_connector,
+    unregister_latest_connector,
+)
 
 
 conf = config()
@@ -20,11 +24,6 @@ def block_for_kubernetes():
 @when_not('kafka.ready')
 def block_for_kafka():
     status_set('blocked', 'Waiting for Kafka relation')
-
-
-@when_not('config.set.group-id')
-def block_for_groupid():
-    status_set('blocked', 'Waiting for group-id configuration')
 
 
 @when_not('config.set.topics')
@@ -63,8 +62,7 @@ def install_kafka_connect_base():
     set_flag('kafka-connect-base.installed')
 
 
-@when('config.set.group-id',
-      'config.set.topics',
+@when('config.set.topics',
       'config.set.workers',
       'config.set.max-tasks',
       'endpoint.kubernetes.available',
@@ -118,6 +116,13 @@ def configure_kafka_connect_base():
 
 
 @when('endpoint.kubernetes.new-status')
+@when_not('kafka-connect-base.configured')
+def remove_kubernetes_status_update():
+    clear_flag('endpoint.kubernetes.new-status')
+
+
+@when('endpoint.kubernetes.new-status',
+      'kafka-connect-base.configured')
 def kubernetes_status_update():
     kubernetes = endpoint_from_flag('endpoint.kubernetes.new-status')
     clear_flag('endpoint.kubernetes.new-status')
@@ -136,7 +141,8 @@ def kubernetes_status_update():
                 if resource['kind'] == "Service":
                     nodeport = resource['spec']['ports'][0]['nodePort']
                 elif resource['kind'] == "Deployment":
-                    if resource['status']['availableReplicas'] == \
+                    if 'availableReplicas' in resource['status'] and \
+                        resource['status']['availableReplicas'] == \
                         resource['status']['readyReplicas']:
                         deployment_running = True
     kubernetes_workers = kubernetes.get_worker_ips()
@@ -149,12 +155,23 @@ def kubernetes_status_update():
         clear_flag('kafka-connect.running')
 
 
+@when('website.available',
+      'kafka-connect.running')
+def website_available():
+    website = endpoint_from_flag('website.available')
+    service = unitdata.kv().get('kafka-connect-service')
+    website.configure(hostname=service.split(':')[0], port=service.split(':')[1])
+
+
 def generate_worker_config():
     # Get worker config set from upper layer and
     # overwrite values set via config worker-config
     properties = unitdata.kv().get('worker.properties', {})
     if 'group.id' not in properties:
-        properties['group.id'] = conf.get('group-id')
+        if conf.get('group-id') == '':
+            properties['group.id'] = os.environ['JUJU_UNIT_NAME'].replace('/', '-')
+        else:
+            properties['group.id'] = conf.get('group-id')
     if 'tasks.max' not in properties:
         properties['tasks.max'] = conf.get('max-tasks')
     if conf.get('worker-config'):
@@ -166,3 +183,26 @@ def generate_worker_config():
             override[key] = value.rstrip()
         properties.update(override)
     return properties
+
+
+@when_any('kafka-connect-base.configured',
+          'kafka-connect.running')
+@when_not_all('kafka.ready',
+              'endpoint.kubernetes.available')
+def reset_base_flags():
+    data_changed('resource-context', {})
+    clear_flag('kafka-connect-base.configured')
+    clear_flag('kafka-connect.running')
+    if unregister_latest_connector():
+        set_flag('kafka-connect-base.unregistered')
+    else:
+        status_set('blocked', 'Could not unregister connectors')
+
+
+@when('kafka-connect-base.unregistered',
+      'kafka-connect.running')
+def reregister_connector():
+    if not register_latest_connector():
+        status_set('blocked', 'Could not reregister previous connectors, trying next hook..')
+    else:
+        clear_flag('kafka-connect-base.unregistered')
