@@ -4,11 +4,6 @@ options:
     default: 1
     description: |
       Number of distributed workers.
-  max-tasks:
-    type: int
-    default: 1
-    description: |
-      Max number of tasks.
   group-id:
     type: string
     default: ""

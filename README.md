@@ -7,9 +7,8 @@ This layer functions as a base to deploy and configure kafka connect workers in 
 
 The layer adds multiple configuration options, these are common configuration parameters used by upper layers and needed in distributed worker configuration:
 ### Mandatory configs
-- `workers` number of workers (Kubernetes pods) to be deployed.
-- `max-tasks` the maximum number of tasks that should be created for this connector. 
-- `group-id` a unique string that identifies the Connect cluster group this worker belongs to.
+- `workers` number of workers (Kubernetes pods) to be deployed. 
+- `group-id` a unique string that identifies the Connect cluster group this worker belongs to. Defaults to the juju app name.
 - `topics` a list of topics to use as input for this connector.
 ### Optional configs
 - `worker-config` allows hard override on worker configs in the form of `property=value`. Multiple properties must be separated by a newline. Properties set via this config will override properties set by an upper layer / config.
@@ -27,7 +26,7 @@ The workflow will be somewhat like this:
 By default the layer uses the docker image [sborny/kafka-connect-base](https://hub.docker.com/r/sborny/kafka-connect-base/). The docker README specifies which connectors are available for use.
 
 ### Helper methods
- Use the helper methods defined in `kakfa_connect_base.py` to setup / configure the workers.
+ Use the helper methods defined in `kakfa_connect_helpers.py` to setup / configure the workers.
 
 ***General functions:***
  - `set_worker_config(config)`  Set worker configs via a dict, a list of configuration is available [here](https://docs.confluent.io/current/connect/allconfigs.html#connect-allconfigs).
@@ -48,7 +47,7 @@ By default the layer uses the docker image [sborny/kafka-connect-base](https://h
 
 ## Example
 ```python
-from charms.layer.kafka_connect_base import register_connector, set_worker_config
+from charms.layer.kafka_connect_helpers import register_connector, set_worker_config
 
 @when('mongodb.available')
 @when_not('kafka-connect-mongodb.configured')
@@ -77,7 +76,7 @@ def run():
 ```
 
 ## Caveats
-All config parameters except `worker-config` need to have at least a default configuration set even if you intend to set all configuration via an upper layer. Normally this should be a small concern since they all have a default value.
+All config parameters except `worker-config` and `group-id` need to have at least a default configuration set even if you intend to set all configuration via an upper layer. Normally this should be a small concern since they all have a default value.
 
 ## Authors
 

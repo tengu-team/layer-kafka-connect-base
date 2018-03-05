@@ -31,13 +31,7 @@ def block_for_topics():
     status_set('blocked', 'Waiting for topics configuration')
 
 
-@when_not('config.set.max-tasks')
-def block_for_max_tasks():
-    status_set('blocked', 'Waiting for max-tasks configuration')
-
-
 @when_any('config.changed.workers',
-          'config.changed.max-tasks',
           'config.changed.group-id',
           'config.changed.worker-config')
 def config_changed():
@@ -64,7 +58,6 @@ def install_kafka_connect_base():
 
 @when('config.set.topics',
       'config.set.workers',
-      'config.set.max-tasks',
       'endpoint.kubernetes.available',
       'kafka.ready',
       'kafka-connect-base.installed')
@@ -111,7 +104,7 @@ def configure_kafka_connect_base():
                 resources.append(doc)
         kubernetes.send_create_request(resources)
 
-    status_set('active', 'ready')
+    status_set('waiting', 'Waiting for k8s deployment (will happen in next hook)')
     set_flag('kafka-connect-base.configured')
 
 
@@ -149,6 +142,7 @@ def kubernetes_status_update():
     if nodeport and kubernetes_workers and deployment_running:
         unitdata.kv().set('kafka-connect-service',
                           kubernetes_workers[0] + ':' + str(nodeport))
+        status_set('active', 'K8s deployment running')
         set_flag('kafka-connect.running')
     else:
         unitdata.kv().set('kafka-connect-service', '')
@@ -172,8 +166,6 @@ def generate_worker_config():
             properties['group.id'] = os.environ['JUJU_UNIT_NAME'].replace('/', '-')
         else:
             properties['group.id'] = conf.get('group-id')
-    if 'tasks.max' not in properties:
-        properties['tasks.max'] = conf.get('max-tasks')
     if conf.get('worker-config'):
         worker_config = conf.get('worker-config').rstrip('\n')
         worker_config = worker_config.split('\n')
@@ -193,6 +185,7 @@ def reset_base_flags():
     data_changed('resource-context', {})
     clear_flag('kafka-connect-base.configured')
     clear_flag('kafka-connect.running')
+    status_set('maintenance', 'Unregistering connector')
     if unregister_latest_connector():
         set_flag('kafka-connect-base.unregistered')
     else:
@@ -202,7 +195,9 @@ def reset_base_flags():
 @when('kafka-connect-base.unregistered',
       'kafka-connect.running')
 def reregister_connector():
+    status_set('maintenance', 'Reregistering connector')
     if not register_latest_connector():
         status_set('blocked', 'Could not reregister previous connectors, trying next hook..')
     else:
+        status_set('active', 'ready')
         clear_flag('kafka-connect-base.unregistered')

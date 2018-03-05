@@ -3,6 +3,7 @@ import requests
 import collections
 from charms.reactive import clear_flag,set_flag
 from charmhelpers.core import unitdata
+from charmhelpers.core.hookenv import log
 
 
 def set_worker_config(config):
@@ -29,12 +30,20 @@ def unregister_latest_connector():
     Returns True when succesfully unregistered or when 
     no previous connector has been set.
     """
-    all_connectors = unitdata.kv().get('connectors', {})    
+    log("UNREGISTER CALLED")
+    all_connectors = unitdata.kv().get('connectors', {})
+    log("all_connectors: ")
+    log(all_connectors)
     if all_connectors:
         for connector_name in all_connectors:
+            log("connector_name: " + connector_name)
             response = unregister_connector(connector_name)
             if not response or (response.status_code != 204 and response.status_code != 404):
+                log("FALSE")
+                log(response.status_code)
+                log(response.json())
                 return False
+    log("SUCCESS")
     return True
 
 
@@ -45,12 +54,20 @@ def register_latest_connector():
     Returns True when succesfully registered or when 
     no previous connector has been set.
     """
+    log("REGISTER CALLED")
     all_connectors = unitdata.kv().get('connectors', {})
+    log("all_connectors: ")
+    log(all_connectors)
     if all_connectors:
         for connector_name, connector_config in all_connectors.items():
+            log("connector_name: " + connector_name)
             response = register_connector(connector_config, connector_name)
             if not response or response.status_code != 201:
+                log("FALSE")
+                log(response.status_code)
+                log(response.json())
                 return False
+    log("SUCCESS")
     return True
 
 
@@ -76,6 +93,8 @@ Api_response = collections.namedtuple('Api_response', ['status_code', 'json'])
 def register_connector(connector, connector_name):
     all_connectors = unitdata.kv().get('connectors', {})
     all_connectors[connector_name] = connector
+    log("UPDATED ALL_CONNECTORS: ")
+    log(all_connectors)
     unitdata.kv().set('connectors', all_connectors)
     headers = {
         'Content-type': 'application/json',
@@ -92,6 +111,7 @@ def register_connector(connector, connector_name):
 
 
 def unregister_connector(connector_name):
+    log("UNREGISTER CALLED")
     all_connectors = unitdata.kv().get('connectors', {})
     all_connectors.pop(connector_name, None)
     unitdata.kv().set('connectors', all_connectors)
