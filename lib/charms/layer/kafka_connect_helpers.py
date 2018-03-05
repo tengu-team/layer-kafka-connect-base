@@ -6,6 +6,9 @@ from charmhelpers.core import unitdata
 from charmhelpers.core.hookenv import log
 
 
+# General functions
+
+
 def set_worker_config(config):
     '''List with available configs
     https://docs.confluent.io/current/connect/allconfigs.html#connect-allconfigs
@@ -20,55 +23,7 @@ def set_base_image(image):
 
 
 def get_worker_service():
-    return unitdata.kv().get('kafka-connect-service', '')
-
-
-def unregister_latest_connector():
-    """Tries to unregister the connectors which were
-    registered previously with register_connector().
-
-    Returns True when succesfully unregistered or when 
-    no previous connector has been set.
-    """
-    log("UNREGISTER CALLED")
-    all_connectors = unitdata.kv().get('connectors', {})
-    log("all_connectors: ")
-    log(all_connectors)
-    if all_connectors:
-        for connector_name in all_connectors:
-            log("connector_name: " + connector_name)
-            response = unregister_connector(connector_name)
-            if not response or (response.status_code != 204 and response.status_code != 404):
-                log("FALSE")
-                log(response.status_code)
-                log(response.json())
-                return False
-    log("SUCCESS")
-    return True
-
-
-def register_latest_connector():
-    """Tries to register the connectors which were
-    registered previously with register_connector().
-
-    Returns True when succesfully registered or when 
-    no previous connector has been set.
-    """
-    log("REGISTER CALLED")
-    all_connectors = unitdata.kv().get('connectors', {})
-    log("all_connectors: ")
-    log(all_connectors)
-    if all_connectors:
-        for connector_name, connector_config in all_connectors.items():
-            log("connector_name: " + connector_name)
-            response = register_connector(connector_config, connector_name)
-            if not response or response.status_code != 201:
-                log("FALSE")
-                log(response.status_code)
-                log(response.json())
-                return False
-    log("SUCCESS")
-    return True
+    return unitdata.kv().get('kafka-connect-service', '')\
 
 
 # The following functions perform REST api calls to the workers. 
@@ -93,8 +48,6 @@ Api_response = collections.namedtuple('Api_response', ['status_code', 'json'])
 def register_connector(connector, connector_name):
     all_connectors = unitdata.kv().get('connectors', {})
     all_connectors[connector_name] = connector
-    log("UPDATED ALL_CONNECTORS: ")
-    log(all_connectors)
     unitdata.kv().set('connectors', all_connectors)
     headers = {
         'Content-type': 'application/json',
@@ -111,7 +64,6 @@ def register_connector(connector, connector_name):
 
 
 def unregister_connector(connector_name):
-    log("UNREGISTER CALLED")
     all_connectors = unitdata.kv().get('connectors', {})
     all_connectors.pop(connector_name, None)
     unitdata.kv().set('connectors', all_connectors)
@@ -241,3 +193,42 @@ def list_tasks(connector_name):
     except requests.exceptions.RequestException as e:
         print(e)
         return None
+
+
+# Functions used by base layer to unregister/reregister connectors 
+# when no Kubernetes and/or Kafka relations are set.
+
+def unregister_latest_connector():
+    """Tries to unregister the connectors which were
+    registered previously with register_connector().
+
+    Returns True when succesfully unregistered or when 
+    no previous connector has been set.
+    """
+    all_connectors = unitdata.kv().get('connectors', {})
+    if all_connectors:
+        for connector_name in all_connectors:
+            response = unregister_connector(connector_name)
+            if not response or (response.status_code != 204 and response.status_code != 404):
+                log(response.status_code)
+                log(response.json())
+                return False
+    return True
+
+
+def register_latest_connector():
+    """Tries to register the connectors which were
+    registered previously with register_connector().
+
+    Returns True when succesfully registered or when 
+    no previous connector has been set.
+    """
+    all_connectors = unitdata.kv().get('connectors', {})
+    if all_connectors:
+        for connector_name, connector_config in all_connectors.items():
+            response = register_connector(connector_config, connector_name)
+            if not response or response.status_code != 201:
+                log(response.status_code)
+                log(response.json())
+                return False
+    return True
