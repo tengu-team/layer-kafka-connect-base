@@ -2,6 +2,12 @@ import os
 import yaml
 import hashlib
 import datetime
+from subprocess import (
+    CalledProcessError,
+    Popen,
+    PIPE,
+    run,
+)
 from charms.reactive import (
     when,
     when_any,
@@ -13,7 +19,12 @@ from charms.reactive import (
 from charms.reactive.helpers import data_changed
 from charms.reactive.relations import endpoint_from_flag
 from charmhelpers.core import unitdata, templating
-from charmhelpers.core.hookenv import status_set, config
+from charmhelpers.core.hookenv import (
+    status_set,
+    config,
+    is_leader,
+    log,
+)
 from charms.layer.kafka_connect_helpers import (
     register_latest_connector,
     unregister_latest_connector,
@@ -25,34 +36,39 @@ conf = config()
 
 @when_not('endpoint.kubernetes.available')
 def block_for_kubernetes():
+    if not is_leader():
+        return
     status_set('blocked', 'Waiting for Kubernetes deployer relation')
 
 
 @when_not('kafka.ready')
 def block_for_kafka():
+    if not is_leader():
+        return
     status_set('blocked', 'Waiting for Kafka relation')
 
 
 @when_not('config.set.topics')
 def block_for_topics():
+    if not is_leader():
+        return
     status_set('blocked', 'Waiting for topics configuration')
-
-
-@when_not('endpoint.kafka-topic.available')
-def block_for_kafka_topics():
-    status_set('blocked', 'Waiting on all 3 topic relations (config, offsets and status)')
 
 
 @when_any('config.changed.workers',
           'config.changed.group-id',
           'config.changed.worker-config')
 def config_changed():
+    if not is_leader():
+        return
     clear_flag('kafka-connect-base.configured')
 
 
 @when('kafka.ready',
       'kafka-connect-base.configured')
 def check_kafka_changed():
+    if not is_leader():
+        return
     kafka = endpoint_from_flag('kafka.ready')
     if data_changed('kafka_info', kafka.kafkas()):
         clear_flag('kafka-connect-base.configured')
@@ -61,6 +77,8 @@ def check_kafka_changed():
 @when('kafka-connect-base.install')
 @when_not('kafka-connect-base.installed')
 def install_kafka_connect_base():
+    if not is_leader():
+        return
     if not os.path.exists('/etc/kafka-connect'):
         os.makedirs('/etc/kafka-connect')
     if not unitdata.kv().get('docker-image', None):
@@ -68,16 +86,57 @@ def install_kafka_connect_base():
     set_flag('kafka-connect-base.installed')
 
 
-@when('endpoint.kafka-topic.new-topic-info')
+@when('kafka.ready')
 @when_not('kafka-connect-base.topic-created')
-def check_kafka_topics_created():
-    kafka_topics = endpoint_from_flag('endpoint.kafka-topic.new-topic-info')
-    topics_info = kafka_topics.get_topics()
-    if len(topics_info) == 3:
-        set_flag('kafka-connect-base.topic-created')
-    else:
-        status_set('blocked', 'Waiting on all 3 topic relations (config, offsets and status)')
-    clear_flag('endpoint.kafka-topics.new-topic-info')
+def create_topics():
+    if not is_leader():
+        return
+    kafka = endpoint_from_flag('kafka.ready')
+    zookeepers = []
+    for zookeeper in kafka.zookeepers():
+        zookeepers.append(zookeeper['host'] + ":" + zookeeper['port'])
+    if not zookeepers:
+        return
+    # Set replication factor as number of Kafka brokers
+    # Use the zookeeper-shell because Juju sets the Kafka
+    # broker info one hook at a time and therefore we do not 
+    # know beforehand howmany brokers there are    
+    p = Popen(['/usr/lib/kafka/bin/zookeeper-shell.sh',
+                   zookeepers[0]],
+               stdin=PIPE, 
+               stdout=PIPE)
+    output = p.communicate(b'ls /brokers/ids')[0]
+    # The broker info is in the last line between [id1,id2,id3]
+    replication_factor = output.decode('utf-8') \
+                               .strip() \
+                               .split('\n')[-1] \
+                               .count(',') \
+                               + 1
+    topics_suffixes = ['connectconfigs', 'connectoffsets', 'connectstatus']
+    partitions = [1, 50, 10] # Best effort partition numbers
+    model = os.environ['JUJU_MODEL_NAME']
+    app, unit_nr = os.environ['JUJU_UNIT_NAME'].split('/')
+    prefix = "{}.{}.{}.".format(model, app, unit_nr)
+    for (suffix, partitions) in zip(topics_suffixes, partitions):
+        topic = prefix + suffix
+        unitdata.kv().set(suffix, topic)
+        if topic_exists(topic, zookeepers):
+            continue
+        try:
+            output = run(['/usr/lib/kafka/bin/kafka-topics.sh',
+                          '--zookeeper',
+                          ",".join(zookeepers),
+                          "--create",
+                          "--topic",
+                          topic,
+                          "--partitions",
+                          str(partitions),
+                          "--replication-factor",
+                          str(replication_factor)], stdout=PIPE)
+            output.check_returncode()
+        except CalledProcessError as e:
+            log(e)
+    set_flag('kafka-connect-base.topic-created')
 
 
 @when('config.set.topics',
@@ -88,6 +147,8 @@ def check_kafka_topics_created():
       'kafka-connect-base.topic-created')
 @when_not('kafka-connect-base.configured')
 def configure_kafka_connect_base():
+    if not is_leader():
+        return
     kafka = endpoint_from_flag('kafka.ready')
     kafka_brokers = []
     for kafka_unit in kafka.kafkas():
@@ -136,12 +197,16 @@ def configure_kafka_connect_base():
 @when('endpoint.kubernetes.new-status')
 @when_not('kafka-connect-base.configured')
 def remove_kubernetes_status_update():
+    if not is_leader():
+        return
     clear_flag('endpoint.kubernetes.new-status')
 
 
 @when('endpoint.kubernetes.new-status',
       'kafka-connect-base.configured')
 def kubernetes_status_update():
+    if not is_leader():
+        return
     kubernetes = endpoint_from_flag('endpoint.kubernetes.new-status')    
     status = kubernetes.get_status()
     if not status or not status['status']:
@@ -177,6 +242,8 @@ def kubernetes_status_update():
 @when('website.available',
       'kafka-connect.running')
 def website_available():
+    if not is_leader():
+        return
     website = endpoint_from_flag('website.available')
     service = unitdata.kv().get('kafka-connect-service')
     website.configure(hostname=service.split(':')[0], port=service.split(':')[1])
@@ -207,6 +274,8 @@ def generate_worker_config():
 @when_not_all('kafka.ready',
               'endpoint.kubernetes.available')
 def reset_base_flags():
+    if not is_leader():
+        return
     data_changed('resource-context', {})
     clear_flag('kafka-connect-base.configured')
     clear_flag('kafka-connect.running')
@@ -220,9 +289,29 @@ def reset_base_flags():
 @when('kafka-connect-base.unregistered',
       'kafka-connect.running')
 def reregister_connector():
+    if not is_leader():
+        return
     status_set('maintenance', 'Reregistering connector')
     if not register_latest_connector():
         status_set('blocked', 'Could not reregister previous connectors, trying next hook..')
     else:
         status_set('active', 'ready')
         clear_flag('kafka-connect-base.unregistered')
+
+
+def topic_exists(topic_name, zookeepers):
+    try:
+        cmd = [
+            '/usr/lib/kafka/bin/kafka-topics.sh',
+            '--zookeeper',
+            ','.join(zookeepers),
+            '--list'
+        ]
+        output = run(cmd, stdout=PIPE)
+        output.check_returncode()
+
+        topics = output.stdout.decode('utf-8').rstrip().split('\n')
+        return True if topic_name in topics else False
+    except CalledProcessError as e:
+        log(e)
+    return None

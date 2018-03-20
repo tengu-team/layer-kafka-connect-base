@@ -23,7 +23,17 @@ def set_base_image(image):
 
 
 def get_worker_service():
-    return unitdata.kv().get('kafka-connect-service', '')\
+    return unitdata.kv().get('kafka-connect-service', '')
+
+
+def get_configs_topic():
+    return unitdata.kv().get('connectconfigs', None)
+
+def get_offsets_topic():
+    return unitdata.kv().get('connectoffsets', None)
+
+def get_status_topic():
+    return unitdata.kv().get('connectstatus', None)
 
 
 # The following functions perform REST api calls to the workers. 

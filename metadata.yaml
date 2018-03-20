@@ -6,15 +6,14 @@ description: |
 tags:
   - streaming
   - storage
-subordinate: false
+subordinate: true
 provides:
   website:
     interface: http
 requires:
   kafka:
     interface: kafka
+    scope: container
   kubernetes:
     interface: kubernetes-deployer
-  kafka-topic:
-    interface: kafka-topic
 series: ["xenial"]

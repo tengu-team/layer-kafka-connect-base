@@ -16,14 +16,15 @@ The layer adds multiple configuration options, these are common configuration pa
 - `worker-config` allows hard override on worker configs in the form of `property=value`. Multiple properties must be separated by a newline. Properties set via this config will override properties set by an upper layer / config.
 
 ## Developing a Charm with this layer
-Include `layer:kafka-connect-base` in your `layer.yaml`. The base layer will wait to create workers until an upper layer sets the flag `kafka-connect-base.install`. Helper methods are available in `charms.layer.kafka_connect_base.py`.
+Include `layer:kafka-connect-base` in your `layer.yaml`. The base layer will create the needed connect topics and set the `kafka-connect-base.topic-created` state, then the layer will wait to create workers until an upper layer sets the flag `kafka-connect-base.install`. Helper methods are available in `charms.layer.kafka_connect_base.py`.
 
 The workflow will be somewhat like this:
 1. Wait until all needed relations are present. 
-2. Set the worker configuration with `set_worker_config(config)`
-3. Set the flag `kafka-connect-base.install` to signal the base layer to deploy the workers to Kubernetes.
-4. The base layer will set `kafka-connect.running` after deployment. You can now send connector configuration.
-5. Use `register_connector(connector, connector_name)` to send the connector config to the workers.
+2. Wait until the `kafka-connect-base.topic-created` state is set.
+3. Set the worker configuration with `set_worker_config(config)`
+4. Set the flag `kafka-connect-base.install` to signal the base layer to deploy the workers to Kubernetes.
+5. The base layer will set `kafka-connect.running` after deployment. You can now send connector configuration.
+6. Use `register_connector(connector, connector_name)` to send the connector config to the workers.
 
 By default the layer uses the docker image [sborny/kafka-connect-base](https://hub.docker.com/r/sborny/kafka-connect-base/). The docker README specifies which connectors are available for use.
 
@@ -34,6 +35,9 @@ By default the layer uses the docker image [sborny/kafka-connect-base](https://h
  - `set_worker_config(config)`  Set worker configs via a dict, a list of configuration is available [here](https://docs.confluent.io/current/connect/allconfigs.html#connect-allconfigs).
  - `get_worker_service()` Returns the ip:port of the Kubernetes service if available.
  - `set_base_image(image)` Set the docker image to deploy to Kubernetes
+ - `get_configs_topic()` Name of the Kafka topic for the `config.storage.topic` configuration.
+ - `get_offsets_topic()` Name of the Kafka topic for the `offsets.storage.topic` configuration.
+ - `get_status_topic()` Name of the Kafka topic for the `status.storage.topic` configuration.
 
  ***REST api calls to the workers:***
  
@@ -51,7 +55,8 @@ By default the layer uses the docker image [sborny/kafka-connect-base](https://h
 ```python
 from charms.layer.kafka_connect_helpers import register_connector, set_worker_config
 
-@when('mongodb.available')
+@when('mongodb.available',
+      'kafka-connect-base.topic-created')
 @when_not('kafka-connect-mongodb.configured')
 def configure():	
     worker_configs = {
