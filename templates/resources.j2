@@ -31,6 +31,7 @@ metadata:
     app: {{label}}
 spec:
   replicas: {{replicas}}
+  revisionHistoryLimit: 2
   selector:
     matchLabels:
       app: {{label}}

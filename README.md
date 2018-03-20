@@ -3,7 +3,9 @@
 Kafka Connect is a framework to stream data into and out of Kafka. For more information see the [documentation](https://docs.confluent.io/current/connect/concepts.html#concepts).
 
 ## Operating a charm that uses this layer
-This layer functions as a base to deploy and configure kafka connect workers in [distributed](https://docs.confluent.io/current/connect/userguide.html#distributed-mode) mode via Kubernetes. 
+This layer functions as a base to deploy and configure kafka connect workers in [distributed](https://docs.confluent.io/current/connect/userguide.html#distributed-mode) mode via Kubernetes.
+
+Each Kafka (distributed) connector needs three management topics. This layer expects three relations to [kafka-topic](https://github.com/tengu-team/layer-kafka-topic) charms. The topic details such as the name should be specified in the README of the Kafka connect charm using this layer.
 
 The layer adds multiple configuration options, these are common configuration parameters used by upper layers and needed in distributed worker configuration:
 ### Mandatory configs
@@ -76,7 +78,8 @@ def run():
 ```
 
 ## Caveats
-All config parameters except `worker-config` and `group-id` need to have at least a default configuration set even if you intend to set all configuration via an upper layer. Normally this should be a small concern since they all have a default value.
+- All config parameters except `worker-config` and `group-id` need to have at least a default configuration set even if you intend to set all configuration via an upper layer. Normally this should be a small concern since they all have a default value.
+- The charm will wait until it has three kafka-topic relations but does not check the validity of these topics. If a topic name is set, other than the format specified by the Kafka connect charm. This layer will still try to deploy.
 
 ## Authors
 

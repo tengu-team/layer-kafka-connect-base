@@ -2,7 +2,14 @@ import os
 import yaml
 import hashlib
 import datetime
-from charms.reactive import when, when_any, when_not, set_flag, clear_flag, when_not_all
+from charms.reactive import (
+    when,
+    when_any,
+    when_not,
+    set_flag,
+    clear_flag,
+    when_not_all,
+)
 from charms.reactive.helpers import data_changed
 from charms.reactive.relations import endpoint_from_flag
 from charmhelpers.core import unitdata, templating
@@ -31,6 +38,11 @@ def block_for_topics():
     status_set('blocked', 'Waiting for topics configuration')
 
 
+@when_not('endpoint.kafka-topic.available')
+def block_for_kafka_topics():
+    status_set('blocked', 'Waiting on all 3 topic relations (config, offsets and status)')
+
+
 @when_any('config.changed.workers',
           'config.changed.group-id',
           'config.changed.worker-config')
@@ -43,7 +55,7 @@ def config_changed():
 def check_kafka_changed():
     kafka = endpoint_from_flag('kafka.ready')
     if data_changed('kafka_info', kafka.kafkas()):
-        clear_flag('kafka-connect-base.installed')
+        clear_flag('kafka-connect-base.configured')
 
 
 @when('kafka-connect-base.install')
@@ -56,11 +68,24 @@ def install_kafka_connect_base():
     set_flag('kafka-connect-base.installed')
 
 
+@when('endpoint.kafka-topic.new-topic-info')
+@when_not('kafka-connect-base.topic-created')
+def check_kafka_topics_created():
+    kafka_topics = endpoint_from_flag('endpoint.kafka-topic.new-topic-info')
+    topics_info = kafka_topics.get_topics()
+    if len(topics_info) == 3:
+        set_flag('kafka-connect-base.topic-created')
+    else:
+        status_set('blocked', 'Waiting on all 3 topic relations (config, offsets and status)')
+    clear_flag('endpoint.kafka-topics.new-topic-info')
+
+
 @when('config.set.topics',
       'config.set.workers',
       'endpoint.kubernetes.available',
       'kafka.ready',
-      'kafka-connect-base.installed')
+      'kafka-connect-base.installed',
+      'kafka-connect-base.topic-created')
 @when_not('kafka-connect-base.configured')
 def configure_kafka_connect_base():
     kafka = endpoint_from_flag('kafka.ready')
@@ -117,19 +142,18 @@ def remove_kubernetes_status_update():
 @when('endpoint.kubernetes.new-status',
       'kafka-connect-base.configured')
 def kubernetes_status_update():
-    kubernetes = endpoint_from_flag('endpoint.kubernetes.new-status')
-    clear_flag('endpoint.kubernetes.new-status')
+    kubernetes = endpoint_from_flag('endpoint.kubernetes.new-status')    
     status = kubernetes.get_status()
     if not status or not status['status']:
         return
-    unit_name = os.environ['JUJU_UNIT_NAME'].split('/')[0]
+    uuid = kubernetes.get_uuid()
     nodeport = None
     deployment_running = False
     # Check if service and deployment has been created on k8s
     # If the service is created, set the connection string
     # else clear it.
     for resources in status['status']:
-        if unit_name == resources:
+        if uuid == resources:
             for resource in status['status'][resources]:
                 if resource['kind'] == "Service":
                     nodeport = resource['spec']['ports'][0]['nodePort']
@@ -143,6 +167,7 @@ def kubernetes_status_update():
         unitdata.kv().set('kafka-connect-service',
                           kubernetes_workers[0] + ':' + str(nodeport))
         status_set('active', 'K8s deployment running')
+        clear_flag('endpoint.kubernetes.new-status')  # TODO try
         set_flag('kafka-connect.running')
     else:
         unitdata.kv().set('kafka-connect-service', '')

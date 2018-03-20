@@ -210,8 +210,7 @@ def unregister_latest_connector():
         for connector_name in all_connectors:
             response = unregister_connector(connector_name)
             if not response or (response.status_code != 204 and response.status_code != 404):
-                log(response.status_code)
-                log(response.json())
+                log(response) if response else log("ERROR something went wrong with the connection")
                 return False
     return True
 
@@ -227,8 +226,7 @@ def register_latest_connector():
     if all_connectors:
         for connector_name, connector_config in all_connectors.items():
             response = register_connector(connector_config, connector_name)
-            if not response or response.status_code != 201:
-                log(response.status_code)
-                log(response.json())
+            if not response or not str(response.status_code).startswith('2'):
+                log(response) if response else log("ERROR something went wrong with the connection")
                 return False
     return True
