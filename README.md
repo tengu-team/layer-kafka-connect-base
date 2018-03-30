@@ -18,6 +18,9 @@ The layer adds multiple configuration options, these are common configuration pa
 ## Developing a Charm with this layer
 Include `layer:kafka-connect-base` in your `layer.yaml`. The base layer will create the needed connect topics and set the `kafka-connect-base.topic-created` state, then the layer will wait to create workers until an upper layer sets the flag `kafka-connect-base.install`. Helper methods are available in `charms.layer.kafka_connect_base.py`.
 
+**Important**
+To avoid conflicting REST calls, use the leadership layer so only the leader can execute Kafka Connect REST calls. If you want to set a status message on other (non-leader) units. The flag `kafka-connect-base.ready` is set when a relation is found for Kafka, kubernetes-deployer and if the topics config is set.
+
 The workflow will be somewhat like this:
 1. Wait until all needed relations are present. 
 2. Wait until the `kafka-connect-base.topic-created` state is set.
@@ -56,7 +59,8 @@ By default the layer uses the docker image [sborny/kafka-connect-base](https://h
 from charms.layer.kafka_connect_helpers import register_connector, set_worker_config
 
 @when('mongodb.available',
-      'kafka-connect-base.topic-created')
+      'kafka-connect-base.topic-created',
+      'leadership.is_leader')
 @when_not('kafka-connect-mongodb.configured')
 def configure():	
     worker_configs = {
@@ -68,7 +72,8 @@ def configure():
     set_flag('kafka-connect-base.install')  # Tell the base layer a worker config is ready !
 
 @when('kafka-connect.running',
-      'mongodb.available')
+      'mongodb.available',
+      'leadership.is_leader')
 @when_not('kafka-connect-mongodb.running')
 def run():
     # Get MongoDB connection information
@@ -84,7 +89,6 @@ def run():
 
 ## Caveats
 - All config parameters except `worker-config` and `group-id` need to have at least a default configuration set even if you intend to set all configuration via an upper layer. Normally this should be a small concern since they all have a default value.
-- The charm will wait until it has three kafka-topic relations but does not check the validity of these topics. If a topic name is set, other than the format specified by the Kafka connect charm. This layer will still try to deploy.
 
 ## Authors
 

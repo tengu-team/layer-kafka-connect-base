@@ -8,6 +8,7 @@ from subprocess import (
     PIPE,
     run,
 )
+from charms import leadership
 from charms.reactive import (
     when,
     when_any,
@@ -36,49 +37,53 @@ conf = config()
 
 @when_not('endpoint.kubernetes.available')
 def block_for_kubernetes():
-    if not is_leader():
-        return
     status_set('blocked', 'Waiting for Kubernetes deployer relation')
 
 
 @when_not('kafka.ready')
 def block_for_kafka():
-    if not is_leader():
-        return
     status_set('blocked', 'Waiting for Kafka relation')
 
 
 @when_not('config.set.topics')
 def block_for_topics():
-    if not is_leader():
-        return
     status_set('blocked', 'Waiting for topics configuration')
+
+
+@when('endpoint.kubernetes.available',
+      'kafka.ready',
+      'config.set.topics')
+def notify_upper_layer_ready():
+    set_flag('kafka-connect-base.ready')
+
+
+@when_not_all('endpoint.kubernetes.available',
+              'kafka.ready',
+              'config.set.topics')
+def notify_upper_layer_not_ready():
+    clear_flag('kafka-connect-base.ready')
 
 
 @when_any('config.changed.workers',
           'config.changed.group-id',
           'config.changed.worker-config')
 def config_changed():
-    if not is_leader():
-        return
     clear_flag('kafka-connect-base.configured')
 
 
+@when('leadership.is_leader')
 @when('kafka.ready',
       'kafka-connect-base.configured')
 def check_kafka_changed():
-    if not is_leader():
-        return
     kafka = endpoint_from_flag('kafka.ready')
     if data_changed('kafka_info', kafka.kafkas()):
         clear_flag('kafka-connect-base.configured')
 
 
-@when('kafka-connect-base.install')
+@when('kafka-connect-base.install', 
+      'leadership.is_leader')
 @when_not('kafka-connect-base.installed')
 def install_kafka_connect_base():
-    if not is_leader():
-        return
     if not os.path.exists('/etc/kafka-connect'):
         os.makedirs('/etc/kafka-connect')
     if not unitdata.kv().get('docker-image', None):
@@ -86,11 +91,10 @@ def install_kafka_connect_base():
     set_flag('kafka-connect-base.installed')
 
 
-@when('kafka.ready')
+@when('kafka.ready',
+      'leadership.is_leader')
 @when_not('kafka-connect-base.topic-created')
 def create_topics():
-    if not is_leader():
-        return
     kafka = endpoint_from_flag('kafka.ready')
     zookeepers = []
     for zookeeper in kafka.zookeepers():
@@ -144,11 +148,10 @@ def create_topics():
       'endpoint.kubernetes.available',
       'kafka.ready',
       'kafka-connect-base.installed',
-      'kafka-connect-base.topic-created')
+      'kafka-connect-base.topic-created',
+      'leadership.is_leader')
 @when_not('kafka-connect-base.configured')
 def configure_kafka_connect_base():
-    if not is_leader():
-        return
     kafka = endpoint_from_flag('kafka.ready')
     kafka_brokers = []
     for kafka_unit in kafka.kafkas():
@@ -194,19 +197,17 @@ def configure_kafka_connect_base():
     set_flag('kafka-connect-base.configured')
 
 
-@when('endpoint.kubernetes.new-status')
+@when('endpoint.kubernetes.new-status',
+      'leadership.is_leader')
 @when_not('kafka-connect-base.configured')
 def remove_kubernetes_status_update():
-    if not is_leader():
-        return
     clear_flag('endpoint.kubernetes.new-status')
 
 
 @when('endpoint.kubernetes.new-status',
-      'kafka-connect-base.configured')
+      'kafka-connect-base.configured',
+      'leadership.is_leader')
 def kubernetes_status_update():
-    if not is_leader():
-        return
     kubernetes = endpoint_from_flag('endpoint.kubernetes.new-status')    
     status = kubernetes.get_status()
     if not status or not status['status']:
@@ -240,10 +241,9 @@ def kubernetes_status_update():
 
 
 @when('website.available',
-      'kafka-connect.running')
+      'kafka-connect.running',
+      'leadership.is_leader')
 def website_available():
-    if not is_leader():
-        return
     website = endpoint_from_flag('website.available')
     service = unitdata.kv().get('kafka-connect-service')
     website.configure(hostname=service.split(':')[0], port=service.split(':')[1])
@@ -269,13 +269,12 @@ def generate_worker_config():
     return properties
 
 
+@when('leadership.is_leader')
 @when_any('kafka-connect-base.configured',
           'kafka-connect.running')
 @when_not_all('kafka.ready',
               'endpoint.kubernetes.available')
 def reset_base_flags():
-    if not is_leader():
-        return
     data_changed('resource-context', {})
     clear_flag('kafka-connect-base.configured')
     clear_flag('kafka-connect.running')
@@ -287,10 +286,9 @@ def reset_base_flags():
 
 
 @when('kafka-connect-base.unregistered',
-      'kafka-connect.running')
+      'kafka-connect.running',
+      'leadership.is_leader')
 def reregister_connector():
-    if not is_leader():
-        return
     status_set('maintenance', 'Reregistering connector')
     if not register_latest_connector():
         status_set('blocked', 'Could not reregister previous connectors, trying next hook..')

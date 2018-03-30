@@ -1,4 +1,5 @@
 includes: ['layer:basic',
+           'layer:leadership',
            'interface:http',
            'interface:kafka',
            'interface:kubernetes-deployer',]
