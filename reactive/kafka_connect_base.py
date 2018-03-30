@@ -9,6 +9,7 @@ from subprocess import (
     run,
 )
 from charms import leadership
+from charms.layer import status
 from charms.reactive import (
     when,
     when_any,
@@ -21,7 +22,6 @@ from charms.reactive.helpers import data_changed
 from charms.reactive.relations import endpoint_from_flag
 from charmhelpers.core import unitdata, templating
 from charmhelpers.core.hookenv import (
-    status_set,
     config,
     is_leader,
     log,
@@ -37,18 +37,18 @@ conf = config()
 
 @when_not('endpoint.kubernetes.available')
 def block_for_kubernetes():
-    status_set('blocked', 'Waiting for Kubernetes deployer relation')
+    status.blocked('Waiting for Kubernetes deployer relation')
 
 
 @when_not('kafka.ready')
 def block_for_kafka():
     clear_flag('kafka-connect-base.topic-created')
-    status_set('blocked', 'Waiting for Kafka relation')
+    status.blocked('Waiting for Kafka relation')
 
 
 @when_not('config.set.topics')
 def block_for_topics():
-    status_set('blocked', 'Waiting for topics configuration')
+    status.blocked('Waiting for topics configuration')
 
 
 @when('endpoint.kubernetes.available',
@@ -194,7 +194,7 @@ def configure_kafka_connect_base():
                 resources.append(doc)
         kubernetes.send_create_request(resources)
 
-    status_set('waiting', 'Waiting for k8s deployment (will happen in next hook)')
+    status.waiting('Waiting for k8s deployment (will happen in next hook)')
     set_flag('kafka-connect-base.configured')
 
 
@@ -233,7 +233,7 @@ def kubernetes_status_update():
     if nodeport and kubernetes_workers and deployment_running:
         unitdata.kv().set('kafka-connect-service',
                           kubernetes_workers[0] + ':' + str(nodeport))
-        status_set('active', 'K8s deployment running')
+        status.active('K8s deployment running')
         clear_flag('endpoint.kubernetes.new-status')  # TODO try
         set_flag('kafka-connect.running')
     else:
@@ -279,22 +279,22 @@ def reset_base_flags():
     data_changed('resource-context', {})
     clear_flag('kafka-connect-base.configured')
     clear_flag('kafka-connect.running')
-    status_set('maintenance', 'Unregistering connector')
+    status.maintenance('Unregistering connector')
     if unregister_latest_connector():
         set_flag('kafka-connect-base.unregistered')
     else:
-        status_set('blocked', 'Could not unregister connectors')
+        status.blocked('Could not unregister connectors')
 
 
 @when('kafka-connect-base.unregistered',
       'kafka-connect.running',
       'leadership.is_leader')
 def reregister_connector():
-    status_set('maintenance', 'Reregistering connector')
+    status.maintenance('Reregistering connector')
     if not register_latest_connector():
-        status_set('blocked', 'Could not reregister previous connectors, trying next hook..')
+        status.blocked('Could not reregister previous connectors, trying next hook..')
     else:
-        status_set('active', 'ready')
+        status.active('ready')
         clear_flag('kafka-connect-base.unregistered')
 
 
