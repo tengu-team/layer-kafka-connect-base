@@ -42,6 +42,7 @@ def block_for_kubernetes():
 
 @when_not('kafka.ready')
 def block_for_kafka():
+    clear_flag('kafka-connect-base.topic-created')
     status_set('blocked', 'Waiting for Kafka relation')
 
 
