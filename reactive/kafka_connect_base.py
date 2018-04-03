@@ -210,8 +210,8 @@ def remove_kubernetes_status_update():
       'leadership.is_leader')
 def kubernetes_status_update():
     kubernetes = endpoint_from_flag('endpoint.kubernetes.new-status')    
-    status = kubernetes.get_status()
-    if not status or not status['status']:
+    k8s_status = kubernetes.get_status()
+    if not k8s_status or not k8s_status['status']:
         return
     uuid = kubernetes.get_uuid()
     nodeport = None
@@ -219,9 +219,9 @@ def kubernetes_status_update():
     # Check if service and deployment has been created on k8s
     # If the service is created, set the connection string
     # else clear it.
-    for resources in status['status']:
+    for resources in k8s_status['status']:
         if uuid == resources:
-            for resource in status['status'][resources]:
+            for resource in k8s_status['status'][resources]:
                 if resource['kind'] == "Service":
                     nodeport = resource['spec']['ports'][0]['nodePort']
                 elif resource['kind'] == "Deployment":
@@ -234,7 +234,7 @@ def kubernetes_status_update():
         unitdata.kv().set('kafka-connect-service',
                           kubernetes_workers[0] + ':' + str(nodeport))
         status.active('K8s deployment running')
-        clear_flag('endpoint.kubernetes.new-status')  # TODO try
+        clear_flag('endpoint.kubernetes.new-status')
         set_flag('kafka-connect.running')
     else:
         unitdata.kv().set('kafka-connect-service', '')
