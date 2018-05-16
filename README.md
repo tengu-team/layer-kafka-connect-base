@@ -5,8 +5,6 @@ Kafka Connect is a framework to stream data into and out of Kafka. For more info
 ## Operating a charm that uses this layer
 This layer functions as a base to deploy and configure kafka connect workers in [distributed](https://docs.confluent.io/current/connect/userguide.html#distributed-mode) mode via Kubernetes.
 
-Each Kafka (distributed) connector needs three management topics. This layer expects three relations to [kafka-topic](https://github.com/tengu-team/layer-kafka-topic) charms. The topic details such as the name should be specified in the README of the Kafka connect charm using this layer.
-
 The layer adds multiple configuration options, these are common configuration parameters used by upper layers and needed in distributed worker configuration:
 ### Mandatory configs
 - `workers` number of workers (Kubernetes pods) to be deployed. 
@@ -70,6 +68,7 @@ def configure():
     set_worker_config(worker_configs)
     set_flag('kafka-connect-mongodb.configured')
     set_flag('kafka-connect-base.install')  # Tell the base layer a worker config is ready !
+
 
 @when('kafka-connect.running',
       'mongodb.available',
