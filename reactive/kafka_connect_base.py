@@ -154,25 +154,27 @@ def create_topics():
 @when_not('kafka-connect-base.configured')
 def configure_kafka_connect_base():
     kafka = endpoint_from_flag('kafka.ready')
+    kubernetes = endpoint_from_flag('endpoint.kubernetes.available')
+
     kafka_brokers = []
     for kafka_unit in kafka.kafkas():
         kafka_brokers.append(kafka_unit['host'] + ':' + kafka_unit['port'])
-
-    juju_app_name = os.environ['JUJU_UNIT_NAME'].split('/')[0]
 
     worker_config = generate_worker_config()
     worker_config['bootstrap.servers'] = ','.join(kafka_brokers)
     port = worker_config['rest.port'] if 'rest.port' in worker_config else 8083
 
+    uuid = kubernetes.get_uuid()
+
     resource_context = {
-        'configmap_name': juju_app_name + '-cfgmap',
-        'label': 'kafka-connect-' + juju_app_name,
+        'configmap_name': '{}-cfgmap'.format(uuid),
+        'label': uuid,
         'properties': worker_config,
-        'service_name': juju_app_name + '-service',
+        'service_name': '{}-service'.format(uuid),
         'port': port,
-        'deployment_name': juju_app_name + '-deployment',
+        'deployment_name': '{}-deployment'.format(uuid),
         'replicas': conf.get('workers', 1),
-        'container_name': juju_app_name,
+        'container_name': uuid,
         'image': unitdata.kv().get('docker-image'),
         'containerport': port,
     }
@@ -186,7 +188,7 @@ def configure_kafka_connect_base():
                           target="/etc/kafka-connect/resources.yaml",
                           context=resource_context)
 
-        kubernetes = endpoint_from_flag('endpoint.kubernetes.available')
+        
         resources = []
         with open('/etc/kafka-connect/resources.yaml', 'r') as f:
             docs = yaml.load_all(f)
@@ -213,22 +215,20 @@ def kubernetes_status_update():
     k8s_status = kubernetes.get_status()
     if not k8s_status or not k8s_status['status']:
         return
-    uuid = kubernetes.get_uuid()
+    
     nodeport = None
     deployment_running = False
     # Check if service and deployment has been created on k8s
     # If the service is created, set the connection string
     # else clear it.
-    for resources in k8s_status['status']:
-        if uuid == resources:
-            for resource in k8s_status['status'][resources]:
-                if resource['kind'] == "Service":
-                    nodeport = resource['spec']['ports'][0]['nodePort']
-                elif resource['kind'] == "Deployment":
-                    if 'availableReplicas' in resource['status'] and \
-                        resource['status']['availableReplicas'] == \
-                        resource['status']['readyReplicas']:
-                        deployment_running = True
+    for resource in k8s_status['status']:
+        if resource['kind'] == "Service":
+            nodeport = resource['spec']['ports'][0]['nodePort']
+        elif resource['kind'] == "Deployment":
+            if 'availableReplicas' in resource['status'] and \
+                resource['status']['availableReplicas'] == \
+                resource['status']['readyReplicas']:
+                deployment_running = True
     kubernetes_workers = kubernetes.get_worker_ips()
     if nodeport and kubernetes_workers and deployment_running:
         unitdata.kv().set('kafka-connect-service',
