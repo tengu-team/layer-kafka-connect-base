@@ -167,12 +167,12 @@ def configure_kafka_connect_base():
     uuid = kubernetes.get_uuid()
 
     resource_context = {
-        'configmap_name': '{}-cfgmap'.format(uuid),
+        'configmap_name': 'cfgmap-{}'.format(uuid),
         'label': uuid,
         'properties': worker_config,
-        'service_name': '{}-service'.format(uuid),
+        'service_name': 'svc-{}'.format(uuid),
         'port': port,
-        'deployment_name': '{}-deployment'.format(uuid),
+        'deployment_name': 'depl-{}'.format(uuid),
         'replicas': conf.get('workers', 1),
         'container_name': uuid,
         'image': unitdata.kv().get('docker-image'),
