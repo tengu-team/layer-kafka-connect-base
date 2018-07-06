@@ -91,8 +91,8 @@ def run():
 - The layer will create 3 Kafka topics for Kafka connect internal use. The number of partitions are hardcoded for best effort use and the replication factor is the number of Kafka brokers. The replication factor will **not** change after initial topic creation. The topics follow the following naming scheme:
 ```python
 model = os.environ['JUJU_MODEL_NAME']
-app, unit_nr = os.environ['JUJU_UNIT_NAME'].split('/')
-prefix = "{}.{}.{}.".format(model, app, unit_nr)
+app = os.environ['JUJU_UNIT_NAME'].split('/')[0]
+prefix = "{}.{}.".format(model, app)
  
 offset.storage.topic = prefix +  '.connectoffsets' # 50 partitions
 config.storage.topic = prefix  +  '.connectconfigs' # 1 partition

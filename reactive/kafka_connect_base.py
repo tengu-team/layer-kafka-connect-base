@@ -120,8 +120,8 @@ def create_topics():
     topics_suffixes = ['connectconfigs', 'connectoffsets', 'connectstatus']
     partitions = [1, 50, 10] # Best effort partition numbers
     model = os.environ['JUJU_MODEL_NAME']
-    app, unit_nr = os.environ['JUJU_UNIT_NAME'].split('/')
-    prefix = "{}.{}.{}.".format(model, app, unit_nr)
+    app = os.environ['JUJU_UNIT_NAME'].split('/')[0]
+    prefix = "{}.{}.".format(model, app)
     for (suffix, partitions) in zip(topics_suffixes, partitions):
         topic = prefix + suffix
         unitdata.kv().set(suffix, topic)
