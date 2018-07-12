@@ -96,6 +96,9 @@ def install_kafka_connect_base():
       'leadership.is_leader')
 @when_not('kafka-connect-base.topic-created')
 def create_topics():
+    if not os.path.exists('/usr/lib/kafka/bin'):
+        status.blocked('Could not find Kafka library, make sure the Kafka Connect charm is colocated with a Kafka unit.')
+        return
     kafka = endpoint_from_flag('kafka.ready')
     zookeepers = []
     for zookeeper in kafka.zookeepers():

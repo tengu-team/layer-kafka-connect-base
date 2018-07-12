@@ -5,6 +5,8 @@ Kafka Connect is a framework to stream data into and out of Kafka. For more info
 ## Operating a charm that uses this layer
 This layer functions as a base to deploy and configure kafka connect workers in [distributed](https://docs.confluent.io/current/connect/userguide.html#distributed-mode) mode via Kubernetes.
 
+The final charm **has to be colocated** with a Kafka unit where there Kafka libs should be available under `/usr/lib/kafka/bin`.
+
 The layer adds multiple configuration options, these are common configuration parameters used by upper layers and needed in distributed worker configuration:
 ### Mandatory configs
 - `workers` number of workers (Kubernetes pods) to be deployed. 
