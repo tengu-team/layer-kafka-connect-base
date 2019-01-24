@@ -140,7 +140,9 @@ def create_topics():
                           "--partitions",
                           str(partitions),
                           "--replication-factor",
-                          str(replication_factor)], stdout=PIPE)
+                          str(replication_factor,
+                          "--config",
+                          "cleanup.policy=compact")], stdout=PIPE)
             output.check_returncode()
         except CalledProcessError as e:
             log(e)
@@ -263,7 +265,7 @@ def generate_worker_config():
         else:
             properties['group.id'] = conf.get('group-id')
     if conf.get('worker-config'):
-        worker_config = conf.get('worker-config').rstrip('\n')
+        worker_config = conf.get('worker-config').rstrip('\n') #TODO test \n vs \\n
         worker_config = worker_config.split('\n')
         override = {}
         for config in worker_config:

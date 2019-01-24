@@ -15,4 +15,4 @@ requires:
     interface: kafka
   kubernetes:
     interface: kubernetes-deployer
-series: ["xenial"]
+series: ["xenial", "bionic"]
